@@ -1,0 +1,146 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum CardStatus {
+  OWNED
+  WATCHING
+}
+
+model Card {
+  id           String         @id @default(cuid())
+  name         String
+  game         String
+  printing     String?
+  finish       String?
+  type         String?
+  status       CardStatus     @default(WATCHING)
+  qty          Int?
+  targetPrice  Float?
+  group        String?
+  tags         Tag[]
+  priceEntries PriceEntry[]
+  purchases    Purchase[]
+  runMoves     PriceRunMove[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([name])
+  @@index([game])
+  @@index([status])
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  cards Card[]
+}
+
+model PriceEntry {
+  id        String   @id @default(cuid())
+  cardId    String
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  price     Float
+  date      DateTime
+  source    String
+  createdAt DateTime @default(now())
+
+  @@index([cardId, date])
+}
+
+/// A single acquisition of a card: one buy, at one price, on one day.
+///
+/// Lots rather than a `costBasis` column on Card, because a playset is
+/// usually assembled over time at different prices — one column would force
+/// either an overwrite or a hand-kept average. Keeping each buy means the
+/// weighted-average basis is derived, and `Card.qty` can be recomputed from
+/// the lots instead of being maintained by hand.
+///
+/// Distinct from PriceEntry: a PriceEntry is what the *market* said on a day,
+/// a Purchase is what *you* actually paid. Only the former feeds the chart
+/// line; the latter is plotted on top of it as a marker.
+model Purchase {
+  id        String   @id @default(cuid())
+  cardId    String
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  qty       Int
+  /// Per-copy price paid, before fees.
+  unitPrice Float
+  date      DateTime
+  /// Where it came from — TCGplayer, an LGS name, a trade. Free text.
+  source    String?
+  /// Shipping/tax for the lot as a whole, not per copy.
+  fees      Float?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([cardId, date])
+}
+
+/// One "fetch all prices" run, kept as a dated report rather than a raw log.
+///
+/// Prices are one-per-card-per-day (a re-fetch replaces the day's entry), so a
+/// second run on the same day is a correction of the first, not a new event —
+/// hence the unique `date` and the replace-on-record behaviour. `ranAt` keeps
+/// the wall-clock time of whichever run last stood.
+///
+/// The counts are of the whole run; `moves` holds only the moves worth reading
+/// (see `isNotableMove`), because a report that lists every half-cent drift is
+/// one nobody opens.
+model PriceRun {
+  id               String         @id @default(cuid())
+  /// Midnight-anchored day the run priced, matching PriceEntry.date.
+  date             DateTime       @unique
+  ranAt            DateTime       @default(now())
+  /// Cards attempted.
+  checked          Int
+  /// Prices successfully written.
+  logged           Int
+  /// Cards Scryfall could not price.
+  skipped          Int
+  /// Priced cards with no earlier entry to compare against.
+  firstTime        Int            @default(0)
+  risers           Int            @default(0)
+  fallers          Int            @default(0)
+  /// Net change in the value of OWNED cards (delta × qty), for the day.
+  ownedValueChange Float          @default(0)
+  /// `[{ name, reason }]` — SQLite has no array column, and these are only
+  /// ever read back whole, so they ride along as JSON.
+  skippedDetail    Json?
+  moves            PriceRunMove[]
+
+  @@index([date])
+}
+
+/// A single notable price move inside a run.
+///
+/// The card link is optional and severed rather than cascaded on delete: a
+/// report is a record of what happened that day, and deleting a card should
+/// not rewrite history. The name is denormalised for the same reason.
+model PriceRunMove {
+  id       String   @id @default(cuid())
+  runId    String
+  run      PriceRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  cardId   String?
+  card     Card?    @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  name     String
+  printing String?
+  finish   String?
+  price    Float
+  previous Float
+  delta    Float
+  /// Fractional change (0.12 = +12%).
+  pct      Float
+
+  @@index([runId])
+}
