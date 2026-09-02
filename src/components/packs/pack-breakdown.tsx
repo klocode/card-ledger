@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Fragment, useState } from "react";
 
 import { AddPullsDialog } from "@/components/packs/add-pulls-dialog";
+import { DeletePackButton } from "@/components/packs/delete-pack-button";
 import { netTone } from "@/components/packs/pack-summary";
 import {
   Table,
@@ -245,7 +246,7 @@ function PackContents({
                   </span>
                 )}
               </span>
-              <span className="shrink-0 tabular-nums">
+              <span className="flex shrink-0 items-center gap-1 tabular-nums">
                 <span className="text-muted-foreground text-xs">
                   {pull.valueAtOpen == null
                     ? "—"
@@ -255,6 +256,13 @@ function PackContents({
                 {pull.latestPrice == null
                   ? "—"
                   : formatCurrency(pull.latestPrice * pull.qty)}
+                <DeletePackButton
+                  target="pull"
+                  id={pull.id}
+                  confirmText={`Remove ${pull.name} from this pack? The card itself stays tracked; only the record of pulling it goes.`}
+                  successText={`Removed ${pull.name} from the pack`}
+                  label=""
+                />
               </span>
             </div>
           ))}
@@ -269,11 +277,22 @@ function PackContents({
         dialog would travel back up to the row and collapse the panel out from
         under the form.
       */}
-      <div onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
         <AddPullsDialog
           openingId={openingId}
           game={game}
           packCost={packCost}
+        />
+        <DeletePackButton
+          target="opening"
+          id={openingId}
+          label="Delete pack"
+          confirmText={
+            pulls.length
+              ? `Delete this pack opening? Its ${pulls.length} pull${pulls.length === 1 ? "" : "s"} go with it, and the pack returns to sealed.`
+              : "Delete this pack opening? The pack returns to sealed."
+          }
+          successText="Pack opening deleted — the pack is sealed again"
         />
       </div>
     </div>

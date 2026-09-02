@@ -323,21 +323,77 @@ export async function openPack(input: OpenPackInput): Promise<OpenPackResult> {
   };
 }
 
+/**
+ * Cards whose quantity depends on pulls that are about to be cascaded away.
+ *
+ * Deleting a purchase or an opening removes its pulls in the database, but a
+ * cascade fires no application code — so without collecting the affected cards
+ * first and re-syncing after, a card goes on claiming copies from a pack that
+ * no longer exists. `deletePull` doesn't need this because it can see its own
+ * card; these two can't, once the rows are gone.
+ */
+async function cardIdsUnder(where: {
+  openingId?: string;
+  purchaseId?: string;
+  productId?: string;
+}): Promise<string[]> {
+  const pulls = await db.pull.findMany({
+    where: where.openingId
+      ? { openingId: where.openingId }
+      : where.purchaseId
+        ? { opening: { purchaseId: where.purchaseId } }
+        : { opening: { purchase: { productId: where.productId } } },
+    select: { cardId: true },
+  });
+  return Array.from(
+    new Set(pulls.map((p) => p.cardId).filter((id): id is string => !!id))
+  );
+}
+
+async function resync(cardIds: string[]) {
+  for (const cardId of cardIds) await syncCardFromAcquisitions(cardId);
+}
+
 export async function deletePackOpening(id: string) {
+  const cardIds = await cardIdsUnder({ openingId: id });
   const opening = await db.packOpening.delete({
     where: { id },
     include: { purchase: { select: { productId: true } } },
   });
+  await resync(cardIds);
+
+  revalidatePath("/");
   revalidatePath("/packs");
   revalidatePath(`/packs/${opening.purchase.productId}`);
   return opening;
 }
 
 export async function deleteSealedPurchase(id: string) {
+  const cardIds = await cardIdsUnder({ purchaseId: id });
   const purchase = await db.sealedPurchase.delete({ where: { id } });
+  await resync(cardIds);
+
+  revalidatePath("/");
   revalidatePath("/packs");
   revalidatePath(`/packs/${purchase.productId}`);
   return purchase;
+}
+
+/**
+ * Remove a product and everything under it.
+ *
+ * Needed because deleting a product's last buy would otherwise strand the
+ * product itself as an empty row with no way to clear it — a mistyped name
+ * would be permanent.
+ */
+export async function deleteSealedProduct(id: string) {
+  const cardIds = await cardIdsUnder({ productId: id });
+  const product = await db.sealedProduct.delete({ where: { id } });
+  await resync(cardIds);
+
+  revalidatePath("/");
+  revalidatePath("/packs");
+  return product;
 }
 
 /**

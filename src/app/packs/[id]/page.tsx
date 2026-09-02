@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { DeletePackButton } from "@/components/packs/delete-pack-button";
 import { OpenPackDialog } from "@/components/packs/open-pack-dialog";
 import { PackBreakdown, type PackRow } from "@/components/packs/pack-breakdown";
 import { PackSummaryPanel } from "@/components/packs/pack-summary";
@@ -83,9 +84,23 @@ export default async function PackProductPage({
           <h1 className="mt-1 text-2xl font-semibold">{product.name}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Badge variant="outline">{product.game}</Badge>
+            {product.setName && <Badge variant="outline">{product.setName}</Badge>}
             {product.setCode && <Badge variant="outline">{product.setCode}</Badge>}
           </div>
         </div>
+
+        <DeletePackButton
+          target="product"
+          id={product.id}
+          label="Delete product"
+          redirectTo="/packs"
+          confirmText={
+            product.summary.packsBought > 0
+              ? `Delete ${product.name} entirely? All ${product.purchases.length} buy${product.purchases.length === 1 ? "" : "s"}, ${product.summary.packsOpened} opened pack${product.summary.packsOpened === 1 ? "" : "s"} and every pull recorded from them go with it. Cards you pulled stay in your collection.`
+              : `Delete ${product.name}?`
+          }
+          successText={`Deleted ${product.name}`}
+        />
       </div>
 
       <PackSummaryPanel summary={product.summary} />
@@ -120,11 +135,24 @@ export default async function PackProductPage({
                     all-in per pack · {opened} opened, {remaining} sealed
                   </span>
                 </div>
-                <OpenPackDialog
-                  purchaseId={purchase.id}
-                  packCost={cost}
-                  remaining={remaining}
-                />
+                <div className="flex items-center gap-1">
+                  <OpenPackDialog
+                    purchaseId={purchase.id}
+                    packCost={cost}
+                    remaining={remaining}
+                  />
+                  <DeletePackButton
+                    target="purchase"
+                    id={purchase.id}
+                    confirmText={
+                      opened > 0
+                        ? `Delete this buy of ${purchase.packCount} pack${purchase.packCount === 1 ? "" : "s"}? Its ${opened} opened pack${opened === 1 ? "" : "s"} and every pull recorded from them go too.`
+                        : `Delete this buy of ${purchase.packCount} pack${purchase.packCount === 1 ? "" : "s"}? Nothing has been opened from it.`
+                    }
+                    successText="Buy deleted"
+                    label=""
+                  />
+                </div>
               </div>
 
               {opened === 0 && (
