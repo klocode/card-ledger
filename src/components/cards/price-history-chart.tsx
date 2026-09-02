@@ -17,6 +17,7 @@ import {
   type ChartRow,
   type PricePoint,
 } from "@/lib/chart-series";
+import { formatCurrency } from "@/lib/cost-basis";
 
 export function PriceHistoryChart({
   points,
@@ -37,6 +38,20 @@ export function PriceHistoryChart({
 
   const rows = buildChartRows(points, buys);
   const hasBuys = buys.length > 0;
+
+  // The y-axis is scaled to the data, so a target far from recent prices sits
+  // outside the domain — and recharts silently discards a reference line it
+  // can't place. Widening the domain to reach the target would flatten the
+  // price movement the chart exists to show, so an out-of-range target is
+  // called out in the footnote instead of being drawn.
+  const values = rows
+    .flatMap((row) => [row.price, row.buy])
+    .filter((value): value is number => value != null);
+  const targetOffChart =
+    targetPrice != null &&
+    values.length > 0 &&
+    (targetPrice < Math.min(...values) || targetPrice > Math.max(...values));
+  const showTargetLine = targetPrice != null && !targetOffChart;
 
   return (
     <div className="flex flex-col gap-2">
@@ -68,7 +83,7 @@ export function PriceHistoryChart({
                 fontSize: 12,
               }}
             />
-            {targetPrice != null && (
+            {showTargetLine && (
               <ReferenceLine
                 y={targetPrice}
                 stroke="var(--muted-foreground)"
@@ -102,14 +117,25 @@ export function PriceHistoryChart({
           </LineChart>
         </ResponsiveContainer>
       </div>
-      {hasBuys && (
-        <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
-          <span
-            className="inline-block size-2.5 rounded-full"
-            style={{ background: "var(--buy)" }}
-          />
-          What you paid
-        </p>
+      {(hasBuys || targetOffChart) && (
+        <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          {hasBuys && (
+            <p className="flex items-center gap-1.5">
+              <span
+                className="inline-block size-2.5 rounded-full"
+                style={{ background: "var(--buy)" }}
+              />
+              What you paid
+            </p>
+          )}
+          {targetOffChart && (
+            <p className="flex items-center gap-1.5">
+              <span className="border-muted-foreground inline-block w-4 border-t border-dashed" />
+              Target {formatCurrency(targetPrice)} —{" "}
+              {targetPrice < Math.min(...values) ? "below" : "above"} chart range
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
