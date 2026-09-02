@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -15,6 +15,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Headings and card names only — a serif at body size in a data-dense table
+// would cost more legibility than it buys character.
+const serifDisplay = Source_Serif_4({
+  variable: "--font-serif-display",
+  subsets: ["latin"],
+  weight: ["600", "700"],
+});
+
 export const metadata: Metadata = {
   title: "Card Ledger",
   description: "Track TCG card prices over time and know when to buy.",
@@ -25,7 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${serifDisplay.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <Providers>

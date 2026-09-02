@@ -208,7 +208,7 @@ export function CardsTable({
                 <span
                   className={
                     card.distanceToTarget != null && card.distanceToTarget <= 0
-                      ? "font-medium text-green-600 dark:text-green-400"
+                      ? "font-medium text-gain"
                       : ""
                   }
                 >

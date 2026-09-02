@@ -12,7 +12,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="border-b">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-2 font-semibold">
+            <Link
+              href="/"
+              className="font-heading flex items-center gap-2 text-lg font-semibold"
+            >
               <Layers className="size-5" />
               Card Ledger
             </Link>
