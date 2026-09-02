@@ -32,6 +32,7 @@ model Card {
   priceEntries PriceEntry[]
   purchases    Purchase[]
   runMoves     PriceRunMove[]
+  pulls        Pull[]
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
@@ -143,4 +144,96 @@ model PriceRunMove {
   pct      Float
 
   @@index([runId])
+}
+
+/// A kind of sealed product — "Marvel Collector Booster", a Pokémon booster
+/// box. The thing that gets bought repeatedly.
+///
+/// A row of its own rather than a name on the purchase, because the question
+/// this answers is per-product: two Marvel box buys six months apart are the
+/// same product and have to roll up together. Grouping on a typed string
+/// would work until "Collector Booster" met "collector booster" and quietly
+/// became two products with two P&Ls — hence the unique constraint, which
+/// makes the rollup a fact instead of a hope.
+model SealedProduct {
+  id        String           @id @default(cuid())
+  name      String
+  /// Free text, matching Card.game, so Pokémon and MTG coexist without an
+  /// enum to keep updated.
+  game      String
+  setCode   String?
+  setName   String?
+  purchases SealedPurchase[]
+  createdAt DateTime         @default(now())
+
+  @@unique([game, name])
+  @@index([game])
+}
+
+/// A buy of sealed product: N packs of one product, at one price, on one day.
+///
+/// Mirrors Purchase deliberately — a box is a lot, the same way a playset is,
+/// and for the same reason: boxes bought on sale and at retail have genuinely
+/// different per-pack costs, and one averaged column would erase that.
+model SealedPurchase {
+  id        String        @id @default(cuid())
+  productId String
+  product   SealedProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// Packs bought; 1 for a single pack.
+  packCount Int
+  /// Per-pack price, before fees.
+  unitPrice Float
+  /// Shipping/tax for the lot as a whole, not per pack.
+  fees      Float?
+  date      DateTime
+  source    String?
+  notes     String?
+  openings  PackOpening[]
+  createdAt DateTime      @default(now())
+
+  @@index([productId])
+}
+
+/// One pack opened, on one day.
+///
+/// Its cost is derived from the parent purchase rather than stored, so
+/// correcting a box price corrects every pack in it instead of leaving stale
+/// copies behind.
+model PackOpening {
+  id         String         @id @default(cuid())
+  purchaseId String
+  purchase   SealedPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  date       DateTime
+  notes      String?
+  pulls      Pull[]
+  createdAt  DateTime       @default(now())
+
+  @@index([purchaseId])
+}
+
+/// One card out of one pack.
+///
+/// The card link is optional and severed rather than cascaded, and the name
+/// is denormalised — same reasoning as PriceRunMove: an opening records what
+/// came out of that pack, and deleting a card should not rewrite it.
+///
+/// `valueAtOpen` is a snapshot because it cannot be re-derived later. The
+/// card's price moves, and "was this worth cracking" is a question about the
+/// day it was cracked; what the pulls are worth *now* comes from the linked
+/// card's latest PriceEntry instead.
+model Pull {
+  id          String      @id @default(cuid())
+  openingId   String
+  opening     PackOpening @relation(fields: [openingId], references: [id], onDelete: Cascade)
+  cardId      String?
+  card        Card?       @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  name        String
+  printing    String?
+  finish      String?
+  qty         Int         @default(1)
+  /// Per-copy market price on the day it was pulled, when one was known.
+  valueAtOpen Float?
+  createdAt   DateTime    @default(now())
+
+  @@index([openingId])
 }

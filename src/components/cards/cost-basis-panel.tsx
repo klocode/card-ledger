@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import {
   computePosition,
   formatCurrency,
@@ -35,18 +37,27 @@ function Stat({
  *
  * Renders nothing without lots — a card you're only watching has no basis to
  * report, and an empty panel of dashes would be noise on every such page.
+ *
+ * A card acquired only from packs has no basis either, since nothing was paid
+ * for the copies individually. It still gets the provenance line, though:
+ * without it the page shows an OWNED card with a quantity and no account of
+ * where it came from, which reads as missing data rather than as the true
+ * answer that its economics live on the pack ledger.
  */
 export function CostBasisPanel({
   lots,
   latestPrice,
   targetPrice,
+  pulledQty = 0,
 }: {
   lots: PurchaseLot[];
   latestPrice: number | null;
   targetPrice: number | null;
+  /** Copies that came out of packs. They have no cost basis by design. */
+  pulledQty?: number;
 }) {
   const position = computePosition(lots, latestPrice);
-  if (!position) return null;
+  if (!position) return pulledQty > 0 ? <PulledNote qty={pulledQty} /> : null;
 
   const tone =
     position.unrealized == null || position.unrealized === 0
@@ -56,6 +67,7 @@ export function CostBasisPanel({
         : "loss";
 
   return (
+    <div className="flex flex-col gap-2">
     <div className="border-border grid grid-cols-2 gap-4 rounded-lg border p-4 sm:grid-cols-4">
       <Stat
         label="Cost basis"
@@ -114,5 +126,29 @@ export function CostBasisPanel({
         }
       />
     </div>
+
+      {pulledQty > 0 && <PulledNote qty={pulledQty} withBasis />}
+    </div>
+  );
+}
+
+/**
+ * Where pulled copies stand. `withBasis` distinguishes "these are extra to the
+ * numbers above" from "these are all there is" — the same fact, but the first
+ * has to explain an apparent mismatch and the second has to explain an absence.
+ */
+function PulledNote({ qty, withBasis }: { qty: number; withBasis?: boolean }) {
+  const copies = `${qty} cop${qty === 1 ? "y" : "ies"}`;
+  return (
+    <p className="text-muted-foreground text-xs">
+      {withBasis
+        ? `Plus ${copies} pulled from packs, not counted above — pulls carry no cost basis of their own, so`
+        : `${copies} pulled from packs. Nothing was paid for ${qty === 1 ? "it" : "them"} individually, so there's no cost basis to show —`}{" "}
+      what they were worth against what the pack cost lives on the{" "}
+      <Link href="/packs" className="underline">
+        pack ledger
+      </Link>
+      .
+    </p>
   );
 }

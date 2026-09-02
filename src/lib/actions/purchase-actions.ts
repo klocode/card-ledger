@@ -2,38 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 
+import { syncCardFromAcquisitions } from "@/lib/card-ownership";
 import { db } from "@/lib/db";
 import {
   createPurchaseSchema,
   type CreatePurchaseInput,
 } from "@/lib/validations/purchase";
-
-/**
- * Re-derive the card's owned quantity from its lots.
- *
- * `Card.qty` predates purchases and is still hand-editable (bulk edit, the
- * edit dialog, CSV import all write it), so this keeps one narrow rule rather
- * than ripping the column out: *while a card has lots, they are the truth* —
- * qty is their sum and the card is OWNED. Deleting the last lot leaves qty and
- * status exactly as they were, since "I removed a receipt" is not the same
- * statement as "I no longer own this", and silently flipping a card back to
- * WATCHING would lose a quantity the user may have typed in by hand.
- */
-async function syncCardFromLots(cardId: string) {
-  const lots = await db.purchase.findMany({
-    where: { cardId },
-    select: { qty: true },
-  });
-  if (lots.length === 0) return;
-
-  await db.card.update({
-    where: { id: cardId },
-    data: {
-      qty: lots.reduce((sum, lot) => sum + lot.qty, 0),
-      status: "OWNED",
-    },
-  });
-}
 
 export type AddPurchaseResult = {
   purchase: { id: string; qty: number; unitPrice: number };
@@ -66,7 +40,7 @@ export async function addPurchase(
     },
   });
 
-  await syncCardFromLots(data.cardId);
+  await syncCardFromAcquisitions(data.cardId);
 
   revalidatePath("/");
   revalidatePath(`/cards/${data.cardId}`);
@@ -90,7 +64,7 @@ export async function addPurchase(
 
 export async function deletePurchase(id: string) {
   const purchase = await db.purchase.delete({ where: { id } });
-  await syncCardFromLots(purchase.cardId);
+  await syncCardFromAcquisitions(purchase.cardId);
   revalidatePath("/");
   revalidatePath(`/cards/${purchase.cardId}`);
   return purchase;

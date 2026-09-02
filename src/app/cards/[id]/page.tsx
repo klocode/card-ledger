@@ -35,6 +35,8 @@ export default async function CardDetailPage({
   // priceEntries come back date-ascending, so the last one is the current mark.
   const latestPrice = card.priceEntries.at(-1)?.price ?? null;
 
+  const pulledQty = card.pulls.reduce((sum, pull) => sum + pull.qty, 0);
+
   const buyPoints = card.purchases.map((purchase) => ({
     date: purchase.date.toISOString().slice(0, 10),
     qty: purchase.qty,
@@ -91,6 +93,7 @@ export default async function CardDetailPage({
         lots={card.purchases}
         latestPrice={latestPrice}
         targetPrice={card.targetPrice}
+        pulledQty={pulledQty}
       />
 
       <section className="flex flex-col gap-3">

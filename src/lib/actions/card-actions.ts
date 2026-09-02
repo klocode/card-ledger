@@ -86,6 +86,14 @@ export async function getCard(id: string) {
       tags: true,
       priceEntries: { orderBy: { date: "asc" } },
       purchases: { orderBy: { date: "asc" } },
+      pulls: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          opening: {
+            include: { purchase: { include: { product: true } } },
+          },
+        },
+      },
     },
   });
 }
